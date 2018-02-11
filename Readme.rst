@@ -70,3 +70,12 @@ This package uses behave for TDD and pytest for unit tests, you can execute non-
 tests and behavioral tests using::
 
         pipenv run python setup.py test
+
+TODO
+----
+
+- Add a website with services to create music based on a github repository
+- Auto-Analize trending github repositories
+- Add options to rate code based on its music
+- Create badges for code musicality
+
