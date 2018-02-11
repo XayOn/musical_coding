@@ -3,94 +3,134 @@
 Convert any piece of code to its musical representation.
 """
 
-import collections
+from functools import lru_cache
 import logging
 
 from docopt import docopt
 import fluidsynth
 import numpy
 import pyaudio
-import pygments
-import pygments.lexers
+import tokenize
 import soundfile
 
-SFILE = '/usr/share/sounds/sf2/FluidR3_GM.sf2'
+# SFILE = '/usr/share/sounds/sf2/FluidR3_GM.sf2'
+SFILE = "/usr/share/sounds/sf2/TimGM6mb.sf2"
 
 logging.basicConfig(level=logging.DEBUG)
-
-
-class Adjust:
-    """Adjust."""
-
-    max_num = 7
-
-    @classmethod
-    def adjust_note(cls, value):
-        return (value * 5)
-
-    @classmethod
-    def adjust_duration(cls, value):
-        result = int(value / 10)
-        if result > 10:
-            result = result / 10
-        if result < 2:
-            result = 1
-        return result
 
 
 class MusicalCodeFile:
     """MUsical Code File."""
 
-    def __init__(self, filename, values=None, sfile=SFILE, freq=44100,
-                 adjust_class=Adjust):
+    max_num = 7
+
+    def __init__(self, filename, sfile=SFILE, freq=44100, max_note_speed=5,
+                 start_note=10, start_duration=0):
+        self.start_note = start_note
+        self.start_duration = start_duration
         self.file = open(filename).readlines()
         self.freq = freq
-        self.lexer = pygments.lexers.guess_lexer_for_filename(
-            filename, self.file)
-
-        if not values:
-            values = {'Token.Keyword': 0.1, 'Token.Text': 0.2,
-                      'Token.Punctuation': 0.01, 'Token.Name.Function': 0.1}
-        self.token_values = collections.defaultdict(lambda: 0, values)
         self.fluid = fluidsynth.Synth()
         sfid = self.fluid.sfload(sfile)
-        self.adjust = adjust_class
+        self.tokens = list(tokenize.generate_tokens(open(filename).readline))
+        self.maxsize = max([len(a.string) for a in self.tokens])
+        self.midsize = int(self.maxsize * 0.55)
+        if self.midsize > max_note_speed:
+            self.midsize = max_note_speed
+        logging.debug("Max note duration: %s", self.midsize)
         self.fluid.program_select(0, sfid, 0, 0)
+        self.note_speed = 20
 
-    def note_for_line(self, line):
-        """Notes."""
-        return round(sum([self.token_values[str(a[0])] * len(a[1])
-                          for a in pygments.lex(line, self.lexer)]))
+    def adjust_note(cls, value):
+        if value > 100:
+            value -= 100
+        elif value < 40:
+            value += 20
+        return int(value)
+
+    def adjust_duration(self, value):
+        result = value / 2
+
+        if result > self.midsize:
+            while result > self.midsize:
+                result -= self.midsize
+
+        if result == 0:
+            result = 0.3
+
+        return result
 
     @property
+    @lru_cache()
     def notes(self):
         """Notes."""
-        for line in self.file:
-            yield (self.adjust.adjust_note(self.note_for_line(line)),
-                   self.adjust.adjust_duration(len(line)), line)
+        note = self.start_note
+        value = self.start_duration
+        line = ''
+        for token in self.tokens:
+            if token.string == '\n':
+                yield (self.adjust_note(note),
+                       self.adjust_duration(value),
+                       line)
+                note = 0
+                value = 0
+                line = ''
+            else:
+                note += token.type
+                value += len(token.string)
+                line += ' ' + token.string
 
-    def play(self):
+    def audio_stream(self):
+        """Get audio stream."""
         pa = pyaudio.PyAudio()
-        strm = pa.open(
+        return pa.open(
             format=pyaudio.paInt16,
             channels=2,
             rate=self.freq,
             output=True)
-        audio = self.audio
-        print("Got audio, playing.")
-        strm.write(audio)
+
+    def play(self):
+        self.audio_stream().write(self.audio)
 
     @property
+    @lru_cache()
     def numpy_array(self):
         """To numpy arrays."""
         curr = []
+        curr_notes = []
+        pending_notes = []
         for note, duration, line in self.notes:
             logging.debug("line <<<%s>>> produced note %s duration %s",
                           line, note, duration)
-            duration = self.freq * duration
-            self.fluid.noteon(0, note * 10, 30)
-            curr = numpy.append(curr, self.fluid.get_samples(duration))
-            self.fluid.noteoff(0, note * 10)
+
+            # If duration is less than three, we assume it's a background one.
+            if duration <= 0.3:
+                pending_notes.append((0, note, int(self.note_speed / 2)))
+            else:
+                curr_notes.append((0, note, self.note_speed))
+                # May add some curr_notes logic here too
+                for note_a in curr_notes:
+                    self.fluid.noteon(*note_a)
+                    for note in pending_notes:
+                        # Maybe remove too-close octaves?
+                        self.fluid.noteon(*note)
+
+                    pending_notes = []
+
+                    curr = numpy.append(
+                        curr, self.fluid.get_samples(
+                            int((self.freq * duration) / 2)))
+
+                    self.fluid.noteoff(*note_a[:-1])
+
+                    curr = numpy.append(
+                        curr, self.fluid.get_samples(
+                            int(self.freq * (duration / 2))))
+
+                    for note in pending_notes:
+                        self.fluid.noteoff(*note)
+
+                curr_notes = []
         return curr
 
     @property
