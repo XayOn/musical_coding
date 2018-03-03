@@ -12,6 +12,8 @@ MusicalCoding
 
 Convert any piece of code to its musical representation.
 
+Supports score generation via lilypond and direct WAV writing.
+
 
 Usage
 -----
@@ -23,6 +25,12 @@ Usage
     Convert any piece of code to its musical representation.
 
     Usage: musical_coding [options]
+
+    Options:
+        --verbose           Enable verbose mode
+        --file=<file>       File to render from
+        --output=<file>     File to render to, if not provided, stdout
+        --output-ly=<file>  Write a lilypond file.
 
 
 Distributing
@@ -78,4 +86,3 @@ TODO
 - Auto-Analize trending github repositories
 - Add options to rate code based on its music
 - Create badges for code musicality
-
