@@ -18,6 +18,21 @@ import tokenize
 
 SFILE = "/usr/share/sounds/sf2/TimGM6mb.sf2"
 
+ly_template = """
+ \\score {{
+  \\new Staff <<
+
+    \\new Voice {{
+      \\set midiInstrument = #"piano"
+      \\voiceOne
+      {notes}
+    }}
+  >>
+  \\layout {{ }}
+  \\midi {{}}
+}}
+"""
+
 NOTES = {
     0: 60,  # A
     1: 68,  # B
@@ -29,42 +44,44 @@ NOTES = {
 }
 
 NOTE_NAMES = {
-    NOTES[0]: 'A',
-    NOTES[1]: 'B',
-    NOTES[2]: 'C',
-    NOTES[3]: 'D',
-    NOTES[4]: 'E',
-    NOTES[5]: 'F',
-    NOTES[6]: 'G',
+    NOTES[0]: 'a',
+    NOTES[1]: 'b',
+    NOTES[2]: 'c',
+    NOTES[3]: 'd',
+    NOTES[4]: 'e',
+    NOTES[5]: 'f',
+    NOTES[6]: 'g',
 }
 
 SCALES = (1, 2, 3)
 
 DURATIONS = (
-    16 / 8,  # breve
-    8 / 8,  # semibreve
-    4 / 8,  # minim
-    2 / 8,  # crotchet
-    1 / 8,  # quaver
-    1 / 16,  # semiquaver
-    1 / 32,  # demisemiquaver
+    1,
+    1 / 2,
+    1 / 4,
+    1 / 8,
+    1 / 16,
+    1 / 32,
+    1 / 64,
 )
 
 DURATION_NAMES = {
-    DURATIONS[0]: 'breve',
-    DURATIONS[1]: 'semibreve',
-    DURATIONS[2]: 'minim',
-    DURATIONS[3]: 'crotchet',
-    DURATIONS[4]: 'quaver',
-    DURATIONS[5]: 'semiquaver',
-    DURATIONS[6]: 'demisemiquaver',
+    DURATIONS[0]: 1,
+    DURATIONS[1]: 2,
+    DURATIONS[2]: 4,
+    DURATIONS[3]: 8,
+    DURATIONS[4]: 16,
+    DURATIONS[5]: 32,
+    DURATIONS[6]: 64
 }
+
+SCALE_NAMES = {1: "'", 2: "''", 3: "'''", 4: "''''"}
 
 
 class Note(namedtuple('Note', 'value, scale, duration, line')):
     def __repr__(self):
-        return "Note({}, scale={}, duration={})".format(
-            NOTE_NAMES[self.value], self.scale, DURATION_NAMES[self.duration])
+        return "{}{}{}".format(NOTE_NAMES[self.value], SCALE_NAMES[self.scale],
+                               DURATION_NAMES[self.duration])
 
 
 def get_normalized_note(max_note: Note, note: Note) -> Note:
@@ -75,7 +92,8 @@ def get_normalized_note(max_note: Note, note: Note) -> Note:
         return (old_value / old_max) * new_max
 
     value = NOTES[int(scale(note.value, max_note.value, len(NOTES) - 1))]
-    scale_ = SCALES[int(scale(note.scale, max_note.scale, len(SCALES) - 1))]
+    scale_ = note.scale
+    # SCALES[int(scale(note.scale, max_note.scale, len(SCALES) - 1))]
     duration = DURATIONS[int(
         scale(note.duration, max_note.duration,
               len(DURATIONS) - 1))]
@@ -129,7 +147,6 @@ class MusicalCodeFile:
             max(note.duration for note in notes), '')
         self.notes = list(
             get_normalized_note(max_note, note) for note in notes)
-        print(self.notes)
 
     def audio_stream(self):
         """Get audio stream."""
@@ -157,6 +174,12 @@ class MusicalCodeFile:
             self.fluid.noteoff(0, note.value)
         return curr
 
+    def save_lilypond(self, where):
+        with open(where, 'wb') as fileo:
+            fileo.write(
+                ly_template.format(notes='\n\t'.join(
+                    str(a) for a in self.notes)))
+
     @property
     def audio(self):
         return fluidsynth.raw_audio_string(self.numpy_array)
@@ -177,12 +200,16 @@ def main():
     Usage: musical_coding [options]
 
     Options:
-        --verbose          Enable verbose mode
-        --file=<file>      File to render from
-        --output=<file>    File to render to, if not provided, stdout
+        --verbose           Enable verbose mode
+        --file=<file>       File to render from
+        --output=<file>     File to render to, if not provided, stdout
+        --output-ly=<file>  Write a lilypond file.
     """
     options = docopt(main.__doc__)
+    mfile = MusicalCodeFile(options['--file'])
     if not options['--output']:
-        MusicalCodeFile(options['--file']).play()
+        mfile.play()
     else:
-        MusicalCodeFile(options['--file']).save(options['--output'])
+        mfile.save(options['--output'])
+    if options['--output-ly']:
+        mfile.save_lilypond(options['--output-ly'])
