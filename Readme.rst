@@ -15,6 +15,9 @@ Convert any piece of code to its musical representation.
 Supports score generation via lilypond and direct WAV writing.
 
 
+.. image:: ./docs/score.png?raw=True
+
+
 Usage
 -----
 
