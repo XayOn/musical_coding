@@ -86,6 +86,7 @@ TODO
 ----
 
 - Add a website with services to create music based on a github repository
+- Create musical videos with both audimeter and the code currently "playing".
 - Auto-Analize trending github repositories
 - Add options to rate code based on its music
 - Create badges for code musicality
