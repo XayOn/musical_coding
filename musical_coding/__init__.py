@@ -154,24 +154,11 @@ class MusicalCodeFile:
 
 
 def main():
-    """musical_coding.
+    """Convert any piece of code to its musical representation.
 
-    Convert any piece of code to its musical representation.
-
-    Usage: musical_coding [options]
-
-    Options:
-        --verbose           Enable verbose mode
-        --file=<file>       File to render from
-        --output=<file>     File to render to, if not provided, stdout
-        --output-ly=<file>  Write a lilypond file.
+    Usage: musical_coding --output-ly=out_file --file=in_file [--verbose]
     """
     options = docopt(main.__doc__)
     mfile = MusicalCodeFile(open(options['--file']).readline)
-    if not options['--output']:
-        mfile.play()
-    else:
-        mfile.save(options['--output'])
-    if options['--output-ly']:
-        with open(options['--output-ly']) as fob:
-            fob.write(mfile.save_lilypond(options['--output-ly']))
+    with open(options['--output-ly']) as fob:
+        fob.write(mfile.save_lilypond(options['--output-ly']))
