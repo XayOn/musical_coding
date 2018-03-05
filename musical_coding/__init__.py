@@ -53,7 +53,7 @@ NOTE_NAMES = {
 SCALES = (1, 2, 3)
 
 DURATIONS = (
-    1,
+    #    1,
     1 / 2,
     1 / 4,
     1 / 8,
@@ -63,13 +63,13 @@ DURATIONS = (
 )
 
 DURATION_NAMES = {
-    DURATIONS[0]: 1,
-    DURATIONS[1]: 2,
-    DURATIONS[2]: 4,
-    DURATIONS[3]: 8,
-    DURATIONS[4]: 16,
-    DURATIONS[5]: 32,
-    DURATIONS[6]: 64
+    #    DURATIONS[0]: 1,
+    DURATIONS[0]: 2,
+    DURATIONS[1]: 4,
+    DURATIONS[2]: 8,
+    DURATIONS[3]: 16,
+    DURATIONS[4]: 32,
+    DURATIONS[5]: 64
 }
 
 SCALE_NAMES = {1: "'", 2: "''", 3: "'''", 4: "''''"}
