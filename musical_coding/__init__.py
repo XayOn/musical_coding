@@ -8,6 +8,7 @@ TODO: I have the score, now find a better way to represent it...
 """
 
 from collections import namedtuple
+from io import StringIO
 import tokenize
 
 from docopt import docopt
@@ -142,11 +143,16 @@ class MusicalCodeFile:
         self.notes = list(
             get_normalized_note(max_note, note) for note in notes)
 
-    def save_lilypond(self, where):
-        with open(where, 'wb') as fileo:
-            fileo.write(
-                ly_template.format(notes='\n\t'.join(
-                    str(a) for a in self.notes)))
+    def to_lilypond(self):
+        return ly_template.format(notes='\n\t'.join(
+            str(a) for a in self.notes))
+
+    @staticmethod
+    def from_string(string):
+        fileo = StringIO()
+        fileo.write(string)
+        fileo.seek(0)
+        return MusicalCodeFile(fileo.readline)
 
     @classmethod
     def postprocess(cls, value):
@@ -161,4 +167,4 @@ def main():
     options = docopt(main.__doc__)
     mfile = MusicalCodeFile(open(options['--file']).readline)
     with open(options['--output-ly']) as fob:
-        fob.write(mfile.save_lilypond(options['--output-ly']))
+        fob.write(mfile.to_lilypond())

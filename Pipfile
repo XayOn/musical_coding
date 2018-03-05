@@ -8,22 +8,16 @@ name = "pypi"
 [packages]
 
 docopt = "*"
-pyfluidsynth = {git = "https://github.com/txomon/pyfluidsynth"}
-pyaudio = "*"
-pygments = "*"
-pysoundfile = "*"
-numpy = "*"
+aiohttp = "*"
 
 
 [dev-packages]
 
-behave = "*"
 pytest = "*"
 pytest-cov = "*"
 "pytest-flake8" = "*"
-ipython = "*"
 
 
 [requires]
 
-python_version = "3.5"
+python_version = "3.6"
