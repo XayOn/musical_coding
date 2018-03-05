@@ -30,6 +30,10 @@ async def render_music(request):
             os.makedirs(output_dir)
             (output_dir / 'music.ly').write_text(response)
             subprocess.check_call(['lilypond', 'music.ly'], cwd=output_dir)
+            if oformat == 'wav':
+                subprocess.check_call(
+                    ['timidity', '-Ow', '-o', 'music.wav', 'music.midi'],
+                    cwd=output_dir)
         response = (output_dir / f'music.{oformat}').read_bytes()
     return aiohttp.web.Response(body=response, headers=HEADERS)
 
