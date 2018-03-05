@@ -8,13 +8,9 @@ TODO: I have the score, now find a better way to represent it...
 """
 
 from collections import namedtuple
-from functools import lru_cache
-from docopt import docopt
-import fluidsynth
-import numpy
-import pyaudio
-import soundfile
 import tokenize
+
+from docopt import docopt
 
 SFILE = "/usr/share/sounds/sf2/TimGM6mb.sf2"
 
@@ -101,9 +97,9 @@ def get_normalized_note(max_note: Note, note: Note) -> Note:
     return Note(value, scale_, duration, note.line)
 
 
-def get_tokenization(filename):
+def get_tokenization(readline):
     note, value = 0, 0
-    enum = enumerate(tokenize.generate_tokens(open(filename).readline))
+    enum = enumerate(tokenize.generate_tokens(readline))
     for num, token in enum:
         # TODO: A "strict" mode should be implemented that does not ignore
         # anything
@@ -128,19 +124,17 @@ def get_tokenization(filename):
 class MusicalCodeFile:
     """Musical Code File."""
 
-    def __init__(self,
-                 filename,
-                 sfile=SFILE,
-                 note_speed=20,
-                 freq=44100,
-                 speed_multiplier=0.8):
-        self.freq = freq
-        self.fluid = fluidsynth.Synth()
-        sfid = self.fluid.sfload(sfile)
-        self.fluid.program_select(0, sfid, 0, 0)
-        self.note_speed = note_speed  # Note speed, as fluidsynth specifies
-        self.speed_multiplier = speed_multiplier
-        notes = list(Note(*args) for args in get_tokenization(filename))
+    def __init__(self, fileo):
+        """Init.
+
+        Arguments:
+
+            fileo: File object to read tokens from
+            sfile: SoundFont file
+            note_sp: Note speed
+            multiplier: Speed multiplier for note speed
+        """
+        notes = list(Note(*args) for args in get_tokenization(fileo))
         max_note = Note(
             max(note.value for note in notes),
             max(note.scale for note in notes),
@@ -148,44 +142,11 @@ class MusicalCodeFile:
         self.notes = list(
             get_normalized_note(max_note, note) for note in notes)
 
-    def audio_stream(self):
-        """Get audio stream."""
-        pa = pyaudio.PyAudio()
-        return pa.open(
-            format=pyaudio.paInt16, channels=2, rate=self.freq, output=True)
-
-    def play(self):
-        self.audio_stream().write(self.audio)
-
-    @property
-    @lru_cache()
-    def numpy_array(self):
-        """To numpy arrays."""
-        curr = []
-        length = len(self.notes)
-        for p, note in enumerate(self.notes):
-            percent = "{:0.0f}%".format(numpy.ceil((p / length) * 100))
-            print(percent, end='\033[20D', flush=True)
-            self.fluid.noteon(0, note.value, self.note_speed)
-            curr = numpy.append(
-                curr,
-                self.fluid.get_samples(
-                    int((self.freq * note.duration * self.speed_multiplier))))
-            self.fluid.noteoff(0, note.value)
-        return curr
-
     def save_lilypond(self, where):
         with open(where, 'wb') as fileo:
             fileo.write(
                 ly_template.format(notes='\n\t'.join(
                     str(a) for a in self.notes)))
-
-    @property
-    def audio(self):
-        return fluidsynth.raw_audio_string(self.numpy_array)
-
-    def save(self, location):
-        return soundfile.write(location, self.numpy_array, self.freq)
 
     @classmethod
     def postprocess(cls, value):
@@ -206,10 +167,11 @@ def main():
         --output-ly=<file>  Write a lilypond file.
     """
     options = docopt(main.__doc__)
-    mfile = MusicalCodeFile(options['--file'])
+    mfile = MusicalCodeFile(open(options['--file']).readline)
     if not options['--output']:
         mfile.play()
     else:
         mfile.save(options['--output'])
     if options['--output-ly']:
-        mfile.save_lilypond(options['--output-ly'])
+        with open(options['--output-ly']) as fob:
+            fob.write(mfile.save_lilypond(options['--output-ly']))

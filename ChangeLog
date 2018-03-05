@@ -1,6 +1,10 @@
 CHANGES
 =======
 
+* Added score
+* Updated readme
+* Added lilypond support
+* Reimplementation, again
 * Changed implementation
 * Added readme
 * Initial commit
