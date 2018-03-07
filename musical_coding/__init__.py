@@ -4,12 +4,13 @@ Basic definition, syntetizing piano.
 
 TODO: Decide how to implement accords.
 TODO: Add more instruments.
-TODO: I have the score, now find a better way to represent it...
 """
 
 from collections import namedtuple
 from io import StringIO
+import datetime
 import tokenize
+import pysrt
 
 from docopt import docopt
 
@@ -81,6 +82,12 @@ class Note(namedtuple('Note', 'value, scale, duration, line')):
                                DURATION_NAMES[self.duration])
 
 
+def timeo(tst):
+    """Time object."""
+    tstamp = datetime.datetime.fromtimestamp(tst)
+    return (tstamp.hour - 1, tstamp.minute, tstamp.second)
+
+
 def get_normalized_note(max_note: Note, note: Note) -> Note:
     """Normalize a note."""
 
@@ -144,19 +151,36 @@ class MusicalCodeFile:
             get_normalized_note(max_note, note) for note in notes)
 
     def to_lilypond(self):
+        """Create lilypond file."""
         return ly_template.format(notes='\n\t'.join(
             str(a) for a in self.notes))
 
+    def gen_subs(self):
+        """Generate subtitles."""
+        start = 0
+        end = 0
+        for index, note in enumerate(self.notes):
+            duration = note.duration + 2
+            print(duration)
+            end = start + duration
+            yield index, timeo(start), timeo(end), note.line
+            start = end
+
+    def to_srt(self):
+        """Create srt file."""
+        result = '\n'.join([
+            str(pysrt.SubRipItem(index, start, end, text))
+            for index, start, end, text in self.gen_subs()
+        ])
+        return result
+
     @staticmethod
     def from_string(string):
+        """Create from string."""
         fileo = StringIO()
         fileo.write(string)
         fileo.seek(0)
         return MusicalCodeFile(fileo.readline)
-
-    @classmethod
-    def postprocess(cls, value):
-        return value
 
 
 def main():
