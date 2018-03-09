@@ -1,29 +1,28 @@
 """Serve musweb app."""
 
-import os
 from pathlib import Path
 import hashlib
+import itertools
+import os
 import subprocess
 
 from aiohttp.web import Application
 import aiohttp.web
 from docopt import docopt
+from git import Repo
 
 from . import MusicalCodeFile
 
+BASE = 'https://api.github.com/repos/{}'
 
-async def render_music(request):
-    """Render music from code provided in request as a lilypond file."""
-    text = await request.text()
+
+def render_file(request, text, oformat):
+    print(text)
     mfile = MusicalCodeFile.from_string(text)
-
-    oformat = request.match_info.get('format', 'ly')
-    nformat = oformat if oformat != "srt" else "mp4"
-    headers = {'content-disposition': 'attachment; filename="music.{nformat}"'}
 
     md5hash = hashlib.sha256()
     md5hash.update(text.encode())
-    output_dir = Path('/tmp') / md5hash.hexdigest()
+    output_dir = Path(request.app['tmpdir']) / md5hash.hexdigest()
 
     if not output_dir.exists():
         os.makedirs(output_dir)
@@ -60,9 +59,70 @@ async def render_music(request):
             ],
             cwd=output_dir)
         mfile = 'music_sub.mp4'
+    return (output_dir / mfile).read_bytes()
 
+
+async def render_music(request):
+    """Render music from code provided in request as a lilypond file."""
+    oformat = request.match_info.get('format', 'ly')
+    headers = {'content-disposition': 'attachment; filename="music.{nformat}"'}
     return aiohttp.web.Response(
-        body=(output_dir / mfile).read_bytes(), headers=headers)
+        body=render_file(request, await request.text(), oformat),
+        headers=headers)
+
+
+def parse_files(root, files, output):
+    """Find python files."""
+    return [[root.replace(str(output.absolute()), '') + '/' + a] for a in files
+            if a.endswith('.py')]
+
+
+async def list_repository(request):
+    """Clone from github repository and return a list of files."""
+    req = await request.json()
+
+    async with request.app['session'] as sess:
+        # Clone repository
+        md5hash = hashlib.sha256()
+        md5hash.update(req['repo'].encode())
+        digest = md5hash.hexdigest()
+        output = Path(request.app['tmpdir']) / digest
+
+        async with aiohttp.ClientSession() as sess:
+            res = await sess.get(BASE.format(req['repo']))
+            res = await res.json()
+            if not output.exists():
+                output.mkdir()
+                Repo.clone_from(res['clone_url'], str(output))
+            files = list(
+                itertools.chain(
+                    *(parse_files(root, files, output)
+                      for root, _, files in os.walk(str(output.absolute())))))
+            return aiohttp.web.json_response({
+                'digest': digest,
+                'files': files
+            })
+
+
+async def from_repository_file(request):
+    """Musically encode a specific file from a repository."""
+    req = await request.json()
+    md5hash = hashlib.sha256()
+    md5hash.update(req['repo'].encode())
+    digest = md5hash.hexdigest()
+    output = Path(request.app['tmpdir']) / digest
+    filename = output / req['filename'].lstrip('/')
+    print(filename)
+    oformat = request.match_info.get('format', 'ly')
+    headers = {'content-disposition': 'attachment; filename="music.{nformat}"'}
+    return aiohttp.web.Response(
+        body=render_file(request, filename.read_text(), oformat),
+        headers=headers)
+
+
+async def create_session(app):
+    """Create app-wide client session."""
+    app['session'] = aiohttp.ClientSession()
 
 
 def run():
@@ -75,11 +135,16 @@ def run():
         --debug  Debug  [default: False]
         --host=<host>   Host to listen on  [default:0.0.0.0]
         --port=<port>   Port to listen on  [default:8080]
+        --tmpdir=<dir>  Where to store files
 
     """
     options = docopt(run.__doc__)
     app = Application(debug=options["--debug"])
-    app.router.add_post('/{format}', render_music)
-    app.router.add_post('/', render_music)
+    app.router.add_post('/render/{format}', render_music)
+    app.router.add_post('/render', render_music)
+    app.router.add_post('/import_repo', list_repository)
+    app.router.add_post('/from_repo/{format}', from_repository_file)
+    app.on_startup.append(create_session)
+    app['tmpdir'] = options['--tmpdir']
     aiohttp.web.run_app(
         app, host=options['--host'], port=int(options['--port']), print=False)

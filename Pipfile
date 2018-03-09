@@ -9,6 +9,7 @@ name = "pypi"
 
 docopt = "*"
 aiohttp = "*"
+gitpython = "*"
 
 
 [dev-packages]
